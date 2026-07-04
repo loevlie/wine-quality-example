@@ -60,3 +60,4 @@ Thumbs.db
 # Secrets
 .env
 *.key
+data/*.csv

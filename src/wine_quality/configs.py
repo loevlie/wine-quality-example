@@ -26,9 +26,9 @@ from wine_quality.objectives import ContrastiveObjective, Objective, SupervisedO
 
 
 class DataConfig(pydantic.BaseModel):
-    n_samples: int = 1000
-    n_features: int = 32
-    n_classes: int = 10
+    csv_path: str = "data/winequality-red.csv"
+    n_features: int = 11  # the 11 physicochemical measurements
+    n_classes: int = 6  # quality scores 3-8
     batch_size: int = 64
     num_workers: int = 4
     val_split: float = 0.2

@@ -1,34 +1,39 @@
-"""Example dataset and dataloader factory.
+"""Wine-quality dataset and dataloader factory.
 
 This file is the data seam: `create_dataloaders(cfg, seed)` is all train.py
-and eval.py know about. To use your own data, replace the body (keep the
-signature) and add whatever fields you need to DataConfig in configs.py —
-both files are yours and are never overwritten by `copier update`.
-
-Demonstrates reproducible loading: seeded splits and worker init.
+and eval.py know about. The knobs it needs (csv_path, batch size, split)
+live on DataConfig in configs.py — both files are yours and are never
+overwritten by `copier update`.
 """
 
+import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 
 from wine_quality.configs import DataConfig
 from wine_quality.utils.seed import seed_worker
 
+WINE_URL = (
+    "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"
+)
 
-class ExampleDataset(Dataset):
-    """Placeholder dataset -- replace with your own.
 
-    Args:
-        n_samples: Number of synthetic samples.
-        n_features: Feature dimensionality.
-        n_classes: Number of target classes.
-    """
+class WineQualityDataset(Dataset):
+    """UCI red wine quality: 11 physicochemical features -> quality score 3-8."""
 
-    def __init__(self, n_samples: int = 1000, n_features: int = 32, n_classes: int = 10) -> None:
-        self.data = torch.randn(n_samples, n_features)
-        self.targets = torch.randint(0, n_classes, (n_samples,))
+    def __init__(self, csv_path: str) -> None:
+        path = Path(csv_path)
+        if not path.exists():  # download once, cache locally
+            path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(WINE_URL, path)
+        rows = np.loadtxt(path, delimiter=";", skiprows=1)
+        x = torch.tensor(rows[:, :-1], dtype=torch.float32)
+        self.data = (x - x.mean(0)) / x.std(0)  # standardize features
+        self.targets = torch.tensor(rows[:, -1], dtype=torch.long) - 3  # 3-8 -> 0-5
 
     def __len__(self) -> int:
         return len(self.data)
@@ -59,9 +64,7 @@ def create_dataloaders(cfg: DataConfig, seed: int = 42) -> DataLoaders:
     Returns:
         DataLoaders with train and val loaders.
     """
-    dataset = ExampleDataset(
-        n_samples=cfg.n_samples, n_features=cfg.n_features, n_classes=cfg.n_classes
-    )
+    dataset = WineQualityDataset(cfg.csv_path)
 
     n_val = int(len(dataset) * cfg.val_split)
     n_train = len(dataset) - n_val

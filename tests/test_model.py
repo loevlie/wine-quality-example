@@ -43,7 +43,7 @@ def test_overfit_single_batch():
 def test_dataloaders():
     """Dataloaders create train and val splits."""
     set_seed(42)
-    cfg = DataConfig(n_samples=100, batch_size=16, num_workers=0)
+    cfg = DataConfig(batch_size=16, num_workers=0)
     loaders = create_dataloaders(cfg, seed=42)
     assert len(loaders.train) > 0
     assert len(loaders.val) > 0
