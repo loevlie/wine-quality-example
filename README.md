@@ -8,8 +8,8 @@ as diffs. Every output below is from an actual run of this code.
 
 > **The result:** predicting red-wine quality from 11 physicochemical measurements
 > ([UCI wine quality](https://archive.ics.uci.edu/dataset/186/wine+quality), 1,599 rows),
-> the reference MLP reaches **0.621 ± 0.038 (5 seeds)** — mean validation accuracy with a
-> bootstrap 95% CI over 5 seeds. Trains in seconds on a laptop CPU.
+> the reference MLP reaches **0.621 ± 0.038** — mean validation accuracy over 5 seeds
+> with a bootstrap 95% CI. Trains in seconds on a laptop CPU.
 
 ## The steps, as commits
 
