@@ -185,9 +185,9 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
         <p>The training loop, eval, checkpointing, resume — <span style="color:var(--brand2)">purple</span> files update themselves when the template improves.</p>
       </div>
       <div class="beat" data-file="t_smoke" data-lines="9-14">
-        <div class="tag">proof of plumbing</div>
+        <div class="tag">known-good baseline</div>
         <h3>It trains before you touch anything</h3>
-        <p>Two epochs on synthetic data. The point isn't the accuracy — it's that the whole pipeline works on minute one.</p>
+        <p>Not to test the model — to test everything else: the install, the wheels for your hardware, config→CLI, the loop, checkpointing. Synthetic data adds zero unknowns. So when your data breaks something in step 2, the suspect list is exactly the files you edited.</p>
       </div>
     </div>
     <div class="panelwrap"><div class="panel" id="p1">
