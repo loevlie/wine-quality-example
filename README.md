@@ -15,9 +15,9 @@ as diffs. Every output below is from an actual run of this code.
 
 | Step | Commit | What changed |
 |---|---|---|
-| 1 · Generate the project | [`822088c`](../../commit/822088c) | `copier copy --trust gh:loevlie/ml-research-template wine-quality-example` — nothing hand-written yet |
-| 2 · Wire in the data | [`2c6e6bc`](../../commit/2c6e6bc) | `DataConfig` describes the dataset, `datamodule.py` loads it — the only two files you own for this |
-| 3 · Name the experiment | [`8a02be5`](../../commit/8a02be5) | The winning settings become `experiment=wine`, a preset in version control |
+| 1 · Generate the project | [`822088c`](https://github.com/loevlie/wine-quality-example/commit/822088c) | `copier copy --trust gh:loevlie/ml-research-template wine-quality-example` — nothing hand-written yet |
+| 2 · Wire in the data | [`2c6e6bc`](https://github.com/loevlie/wine-quality-example/commit/2c6e6bc) | `DataConfig` describes the dataset, `datamodule.py` loads it — the only two files you own for this |
+| 3 · Name the experiment | [`8a02be5`](https://github.com/loevlie/wine-quality-example/commit/8a02be5) | The winning settings become `experiment=wine`, a preset in version control |
 
 Read the step-2 diff first — it's the whole "bring your own data" story:
 the entry points (`train.py`, `eval.py`) never change, because they only call
