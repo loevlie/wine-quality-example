@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anatomy of an ML experiment — wine-quality walkthrough</title>
+<meta name="description" content="An interactive walkthrough of ml-research-template: every key line of a real experiment, explained in place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%236c63ff'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='white'%3E⚗%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0d0e1a; --bg2:#13152a; --panel:#171933; --panel2:#1d2040;
+  --ink:#e8e9f4; --mut:#9a9db8; --dim:#6a6d8a;
+  --brand:#6c63ff; --brand2:#9d97ff; --accent:#4ade80; --warn:#fbbf24;
+  --card:#161831; --line:#262a4d;
+  --hl:#232655; --hlborder:#6c63ff;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:'Inter',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;overflow-x:hidden}
+a{color:var(--brand2);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.92em;background:var(--panel);padding:.1em .35em;border-radius:4px}
+
+/* progress bar */
+#prog{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,#3b3a7a,#6c63ff,#9d97ff);z-index:50;transition:width .1s linear}
+
+/* header nav */
+header.nav{position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:14px;
+  padding:12px 22px;background:rgba(13,14,26,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+header.nav .logo{font-weight:800;font-size:.95rem;letter-spacing:.01em;white-space:nowrap}
+header.nav .logo span{color:var(--brand2)}
+nav.steps{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+nav.steps a{font-size:.8rem;font-weight:600;color:var(--mut);padding:5px 12px;border-radius:99px;border:1px solid transparent;white-space:nowrap}
+nav.steps a:hover{color:var(--ink);text-decoration:none}
+nav.steps a.on{color:#fff;background:var(--panel2);border-color:var(--brand)}
+
+/* hero */
+.hero{min-height:88vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+  padding:110px 24px 60px;position:relative;
+  background:radial-gradient(1100px 500px at 50% -10%,rgba(108,99,255,.22),transparent 65%)}
+.hero .kicker{font-family:var(--mono);font-size:.8rem;color:var(--brand2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:18px}
+.hero h1{font-size:clamp(2rem,5.5vw,3.6rem);font-weight:800;line-height:1.12;max-width:820px}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,#8f88ff,#c4c0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p.sub{color:var(--mut);max-width:600px;margin:20px auto 0;font-size:1.05rem}
+.hero .chips{display:flex;gap:10px;margin-top:28px;flex-wrap:wrap;justify-content:center}
+.chip{font-family:var(--mono);font-size:.8rem;padding:7px 14px;border-radius:99px;background:var(--panel);border:1px solid var(--line);color:var(--mut)}
+.chip b{color:var(--accent);font-weight:600}
+.hero .links{margin-top:26px;display:flex;gap:18px;font-size:.9rem;flex-wrap:wrap;justify-content:center}
+.hero .scrollhint{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);color:var(--dim);font-size:.78rem;
+  animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,7px)}}
+@media (prefers-reduced-motion:reduce){.hero .scrollhint{animation:none}}
+
+/* step sections */
+section.step{max-width:1180px;margin:0 auto;padding:40px 22px 8vh}
+.step-head{padding:8vh 0 40px;max-width:640px}
+.step-head .num{font-family:var(--mono);color:var(--brand2);font-size:.85rem;letter-spacing:.1em}
+.step-head h2{font-size:clamp(1.5rem,3.2vw,2.2rem);font-weight:800;margin-top:6px}
+.step-head p{color:var(--mut);margin-top:10px}
+
+.duo{display:grid;grid-template-columns:minmax(280px,5fr) minmax(360px,7fr);gap:36px;align-items:start}
+
+/* beats column */
+.beats{display:flex;flex-direction:column;gap:38vh;padding:14vh 0 20vh}
+.beat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+  opacity:.38;transform:translateY(6px);transition:opacity .35s,transform .35s,border-color .35s;cursor:pointer}
+.beat.on{opacity:1;transform:none;border-color:var(--brand);box-shadow:0 8px 40px -18px rgba(108,99,255,.45)}
+.beat .tag{font-family:var(--mono);font-size:.7rem;color:var(--brand2);letter-spacing:.08em;text-transform:uppercase}
+.beat h3{font-size:1.02rem;font-weight:700;margin:6px 0 6px}
+.beat p{font-size:.9rem;color:var(--mut)}
+.beat p code{font-size:.82em}
+
+/* code panel */
+.panelwrap{position:sticky;top:76px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  box-shadow:0 20px 70px -30px rgba(0,0,0,.7)}
+.panel .bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--line)}
+.panel .dots{display:flex;gap:6px}
+.panel .dots i{width:10px;height:10px;border-radius:50%;background:#3a3d63;display:block}
+.panel .fname{font-family:var(--mono);font-size:.8rem;color:var(--mut)}
+.panel .own{margin-left:auto;font-family:var(--mono);font-size:.68rem;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.own.yours{background:rgba(74,222,128,.12);color:var(--accent);border:1px solid rgba(74,222,128,.35)}
+.own.tmpl{background:rgba(157,151,255,.1);color:var(--brand2);border:1px solid rgba(157,151,255,.3)}
+.own.out{background:rgba(251,191,36,.09);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
+.panel .body{max-height:72vh;overflow:auto;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){.panel .body{scroll-behavior:auto}}
+.codefile{display:none;position:relative;padding:14px 0;font-family:var(--mono);font-size:.8rem;line-height:1.75}
+.codefile.show{display:block}
+.ln{display:block;padding:0 18px 0 14px;border-left:3px solid transparent;white-space:pre;transition:opacity .3s,background .3s;min-height:1.4em}
+.dimmed .ln{opacity:.34}
+.dimmed .ln.hl{opacity:1;background:var(--hl);border-left-color:var(--hlborder)}
+/* syntax */
+.tk-k{color:#c792ea}.tk-s{color:#c3e88d}.tk-c{color:#5c6091;font-style:italic}.tk-n{color:#f78c6c}
+.tk-d{color:#82aaff}.tk-f{color:#82aaff}.tk-p{color:#7f84ad}
+.tk-prompt{color:#4ade80;font-weight:600}.tk-hi{color:#ffd479}.tk-head{color:#9d97ff}
+.vizfile{display:none;padding:26px 22px}
+.vizfile.show{display:block}
+
+/* interlude + footer */
+.interlude{max-width:760px;margin:0 auto;padding:14vh 24px;text-align:center}
+.interlude p{font-size:clamp(1.1rem,2.4vw,1.5rem);font-weight:600;line-height:1.5}
+.interlude p span{color:var(--brand2)}
+footer.end{border-top:1px solid var(--line);margin-top:8vh;padding:9vh 24px 12vh;text-align:center;
+  background:radial-gradient(900px 400px at 50% 120%,rgba(108,99,255,.16),transparent 65%)}
+footer.end h2{font-size:clamp(1.4rem,3vw,2rem);font-weight:800}
+footer.end p{color:var(--mut);max-width:560px;margin:14px auto 0}
+.cmd{display:inline-block;margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px 22px;font-family:var(--mono);font-size:.85rem;color:var(--ink);text-align:left}
+.cmd .tk-prompt{user-select:none}
+footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;flex-wrap:wrap;font-size:.9rem}
+
+@media (max-width:900px){
+  .duo{grid-template-columns:1fr}
+  .panelwrap{position:sticky;top:60px;z-index:10}
+  .panel .body{max-height:44vh}
+  .beats{gap:16vh;padding:6vh 0 10vh}
+  .beat{opacity:1;transform:none}
+  header.nav{padding:10px 14px}
+  nav.steps a{padding:4px 9px;font-size:.72rem}
+}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+<header class="nav">
+  <div class="logo">⚗ wine-quality <span>walkthrough</span></div>
+  <nav class="steps" id="stepnav">
+    <a href="#s1">1 · Generate</a><a href="#s2">2 · Data</a><a href="#s3">3 · Train</a><a href="#s4">4 · Prove it</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <div class="kicker">ml-research-template · interactive walkthrough</div>
+  <h1>Anatomy of an <em>ML experiment</em>, one line at a time</h1>
+  <p class="sub">A real project, a real dataset, real outputs. Scroll — each card lights up the exact
+  lines of code doing the work.</p>
+  <div class="chips">
+    <span class="chip">UCI wine quality · 1,599 rows</span>
+    <span class="chip">laptop CPU · seconds/epoch</span>
+    <span class="chip">result <b>0.621 ± 0.038</b> (5 seeds)</span>
+  </div>
+  <div class="links">
+    <a href="https://github.com/loevlie/wine-quality-example">This repo (one commit per step)</a>
+    <a href="https://github.com/loevlie/ml-research-template">The template</a>
+    <a href="https://loevlie.github.io/ml-research-template/">Docs</a>
+  </div>
+  <div class="scrollhint">scroll ↓</div>
+</div>
+
+<!-- ============ STEP 1 ============ -->
+<section class="step" id="s1">
+  <div class="step-head">
+    <div class="num">STEP 1 / 4</div>
+    <h2>Generate the project</h2>
+    <p>One command scaffolds the lab. Nothing here is hand-written yet.</p>
+  </div>
+  <div class="duo">
+    <div class="beats" data-panel="p1">
+      <div class="beat" data-file="t_gen" data-lines="1-2">
+        <div class="tag">the command</div>
+        <h3>One command, one question set</h3>
+        <p>Copier asks ~8 prompts (name, Python, PyTorch or JAX, tracker…) and writes a working project. <code>--trust</code> lets it run <code>git init</code> + <code>uv sync</code> for you.</p>
+      </div>
+      <div class="beat" data-file="t_gen" data-lines="4-11">
+        <div class="tag">what you get</div>
+        <h3>It arrives ready to run</h3>
+        <p>Dependencies locked, git initialized, pre-commit hooks installed. The printed commands are the whole quickstart.</p>
+      </div>
+      <div class="beat" data-file="t_tree" data-lines="3-7">
+        <div class="tag">the map</div>
+        <h3>Five files are yours</h3>
+        <p>Configs, data, model, presets, loss — <span style="color:var(--accent)">green</span> files are the ones you'll ever edit. <code>copier update</code> never overwrites them.</p>
+      </div>
+      <div class="beat" data-file="t_tree" data-lines="8-10">
+        <div class="tag">the machinery</div>
+        <h3>The rest is template-owned</h3>
+        <p>The training loop, eval, checkpointing, resume — <span style="color:var(--brand2)">purple</span> files update themselves when the template improves.</p>
+      </div>
+      <div class="beat" data-file="t_smoke" data-lines="9-14">
+        <div class="tag">proof of plumbing</div>
+        <h3>It trains before you touch anything</h3>
+        <p>Two epochs on synthetic data. The point isn't the accuracy — it's that the whole pipeline works on minute one.</p>
+      </div>
+    </div>
+    <div class="panelwrap"><div class="panel" id="p1">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><span class="fname"></span><span class="own"></span></div>
+      <div class="body"></div>
+    </div></div>
+  </div>
+</section>
+
+<div class="interlude"><p>Now the real work — and it's <span>two files</span>.</p></div>
+
+<!-- ============ STEP 2 ============ -->
+<section class="step" id="s2">
+  <div class="step-head">
+    <div class="num">STEP 2 / 4</div>
+    <h2>Wire in the data</h2>
+    <p>The entry points never change. You describe the data, then load it.</p>
+  </div>
+  <div class="duo">
+    <div class="beats" data-panel="p2">
+      <div class="beat" data-file="c_cfg" data-lines="1-7">
+        <div class="tag">configs.py</div>
+        <h3>Describe the dataset, typed</h3>
+        <p>Six fields say everything train.py needs to know. Pydantic validates them; typos in a flag die before training starts.</p>
+      </div>
+      <div class="beat" data-file="c_cfg" data-lines="2">
+        <div class="tag">configs.py</div>
+        <h3>A field is a flag is a record</h3>
+        <p>Because <code>csv_path</code> is a config field, it's automatically a CLI flag (<code>data.csv_path=…</code>) <em>and</em> it lands in every run's provenance snapshot.</p>
+      </div>
+      <div class="beat" data-file="c_cfg" data-lines="3-4,14-16">
+        <div class="tag">configs.py</div>
+        <h3>The model sizes itself to the data</h3>
+        <p><code>ModelConfig</code> leaves <code>n_features</code>/<code>n_classes</code> as <code>None</code> — they're filled from <code>DataConfig</code>…</p>
+      </div>
+      <div class="beat" data-file="c_cfg" data-lines="21-27">
+        <div class="tag">configs.py</div>
+        <h3>…by one visible function</h3>
+        <p><code>resolved()</code> is the entire "config interpolation system". No <code>${...}</code> syntax to learn — it's Python you can put a breakpoint in.</p>
+      </div>
+      <div class="beat" data-file="d_dm" data-lines="9-13">
+        <div class="tag">datamodule.py</div>
+        <h3>Download once, cache forever</h3>
+        <p>First run fetches 84 KB from UCI and saves it to <code>cfg.csv_path</code>. Every later run — and every test — hits the local file.</p>
+      </div>
+      <div class="beat" data-file="d_dm" data-lines="14-17">
+        <div class="tag">datamodule.py</div>
+        <h3>Four lines of real preprocessing</h3>
+        <p>Load, standardize each feature, shift labels 3–8 → 0–5. That's the whole ETL for this dataset — kept where you can see it.</p>
+      </div>
+      <div class="beat" data-file="d_dm" data-lines="26-28">
+        <div class="tag">datamodule.py</div>
+        <h3>The seam</h3>
+        <p><code>create_dataloaders(cfg, seed)</code> is all train.py and eval.py ever call. Swap the dataset class inside it and the rest of the system doesn't notice.</p>
+      </div>
+    </div>
+    <div class="panelwrap"><div class="panel" id="p2">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><span class="fname"></span><span class="own"></span></div>
+      <div class="body"></div>
+    </div></div>
+  </div>
+</section>
+
+<div class="interlude"><p>That was the diff. Everything after this is <span>just running things</span>.</p></div>
+
+<!-- ============ STEP 3 ============ -->
+<section class="step" id="s3">
+  <div class="step-head">
+    <div class="num">STEP 3 / 4</div>
+    <h2>Train &amp; evaluate</h2>
+    <p>Every line of console output is load-bearing. Read it once, trust it forever.</p>
+  </div>
+  <div class="duo">
+    <div class="beats" data-panel="p3">
+      <div class="beat" data-file="t_train" data-lines="1">
+        <div class="tag">the run</div>
+        <h3>Overrides are just <code>key=value</code></h3>
+        <p>No YAML edit needed for a one-off: any config field is addressable from the CLI, Hydra-style.</p>
+      </div>
+      <div class="beat" data-file="t_train" data-lines="7">
+        <div class="tag">provenance</div>
+        <h3>The line that saves future-you</h3>
+        <p><code>config.yaml</code> stores the resolved config, the git SHA, and the exact command. Re-running this result in six months is a copy-paste.</p>
+      </div>
+      <div class="beat" data-file="t_train" data-lines="9-11">
+        <div class="tag">training</div>
+        <h3>Real learning, real fast</h3>
+        <p>55% accuracy after one epoch on a laptop CPU. Early stopping (<code>patience</code>) decides when 30 epochs is too many.</p>
+      </div>
+      <div class="beat" data-file="t_train" data-lines="14-16">
+        <div class="tag">the footer</div>
+        <h3>Checkpoints + a command to paste</h3>
+        <p><code>best.ckpt</code> and <code>last.ckpt</code> are written every epoch; the <code>evaluate</code> line is ready to run as-is.</p>
+      </div>
+      <div class="beat" data-file="t_eval" data-lines="2-3">
+        <div class="tag">eval</div>
+        <h3>Eval restores the run's settings</h3>
+        <p>It reads the snapshot next to the checkpoint — data path, model size, loss — so the numbers match training <em>exactly</em>: 0.9350 / 0.6489.</p>
+      </div>
+      <div class="beat" data-file="c_exp" data-lines="5-9">
+        <div class="tag">experiments.py</div>
+        <h3>Name the winning settings</h3>
+        <p>The keeper settings become <code>experiment=wine</code> — a preset in version control. Results trace to a commit, not a shell history.</p>
+      </div>
+    </div>
+    <div class="panelwrap"><div class="panel" id="p3">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><span class="fname"></span><span class="own"></span></div>
+      <div class="body"></div>
+    </div></div>
+  </div>
+</section>
+
+<div class="interlude"><p>One seed is an anecdote. <span>Five seeds is a claim.</span></p></div>
+
+<!-- ============ STEP 4 ============ -->
+<section class="step" id="s4">
+  <div class="step-head">
+    <div class="num">STEP 4 / 4</div>
+    <h2>Prove it</h2>
+    <p>The publication-grade number: a mean, an interval, and nothing hidden.</p>
+  </div>
+  <div class="duo">
+    <div class="beats" data-panel="p4">
+      <div class="beat" data-file="t_seeds" data-lines="1-2">
+        <div class="tag">multi-seed</div>
+        <h3>Same script, five seeds</h3>
+        <p><code>run_seeds.sh</code> just loops <code>train.py seed=…</code> into one results directory. On SLURM the same thing is a job array.</p>
+      </div>
+      <div class="beat" data-file="t_seeds" data-lines="4-9">
+        <div class="tag">aggregate</div>
+        <h3>Mean, spread, interval</h3>
+        <p>The aggregator reads each seed's <code>metrics.json</code> and bootstraps a 95% CI — 10,000 resamples of the 5-seed mean.</p>
+      </div>
+      <div class="beat" data-file="v_ci" data-lines="">
+        <div class="tag">what the CI shows</div>
+        <h3>Seeds scatter. The interval owns it.</h3>
+        <p>Seed 42 alone would have reported 0.677 — flattering and wrong. The band is the honest range for the mean.</p>
+      </div>
+      <div class="beat" data-file="t_seeds" data-lines="7,9">
+        <div class="tag">the paper line</div>
+        <h3>0.621 ± 0.038 (5 seeds)</h3>
+        <p>That's what goes in the table. Beating a baseline? Run it with the <em>same seeds</em> and pass <code>--baseline</code> for a paired test + effect size.</p>
+      </div>
+    </div>
+    <div class="panelwrap"><div class="panel" id="p4">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><span class="fname"></span><span class="own"></span></div>
+      <div class="body"></div>
+    </div></div>
+  </div>
+</section>
+
+<footer class="end">
+  <h2>That's the whole loop.</h2>
+  <p>Data → train → eval → claim, with provenance at every step. The
+  <a href="https://loevlie.github.io/ml-research-template/tour/">hands-on tour</a> continues from here:
+  sweeps, Optuna, crash recovery, and a real paired significance test.</p>
+  <div class="cmd"><span class="tk-prompt">$</span> uv tool install copier<br>
+  <span class="tk-prompt">$</span> copier copy --trust gh:loevlie/ml-research-template my-project</div>
+  <div class="links">
+    <a href="https://github.com/loevlie/wine-quality-example">Read the commits</a>
+    <a href="https://loevlie.github.io/ml-research-template/tutorial/">The written tutorial</a>
+    <a href="https://loevlie.github.io/ml-research-template/">All docs</a>
+  </div>
+</footer>
+
+<script>
+/* ---------- file contents (real code / real outputs) ---------- */
+const FILES = {
+  t_gen: {name:'terminal', lang:'sh', own:['out','session'], code:
+`$ uv tool install copier
+$ copier copy --trust gh:loevlie/ml-research-template wine-quality-example
+
+"Wine Quality" is ready at wine-quality-example
+(with --trust, git init + uv sync + pre-commit install already ran)
+
+Try it:
+  cd wine-quality-example
+  uv run python src/wine_quality/train.py     # train the reference model
+  uv run python src/wine_quality/train.py --help
+  uv run pytest                               # smoke tests`},
+
+  t_tree: {name:'wine-quality-example/', lang:'tree', own:['tmpl','generated'], code:
+`wine-quality-example/
+├─ src/wine_quality/
+│Y ├─ configs.py           ← yours · every knob, typed
+│Y ├─ data/datamodule.py   ← yours · the data seam
+│Y ├─ models/module.py     ← yours · the model seam
+│Y ├─ experiments.py       ← yours · named presets
+│Y ├─ objectives.py        ← yours · loss + forward pass
+│T ├─ train.py             ← template · the orchestrator
+│T ├─ eval.py              ← template · eval entry point
+│T └─ training_loop.py     ← template · epochs, ckpts, resume
+├─ scripts/                ← seeds · sweep · tune · SLURM
+├─ tests/                  ← 22 smoke tests
+└─ pyproject.toml          ← uv-locked dependencies`},
+
+  t_smoke: {name:'terminal', lang:'out', own:['out','real output'], code:
+`$ uv run python src/wine_quality/train.py trainer.max_epochs=2
+------------------------------------------------------------------------
+run dir   outputs/2026-07-04/15-29-49
+model     ExampleModel | 22,026 params | lr=0.0003
+trainer   max 2 epochs | 32-true | seed=42
+loss      SupervisedLossConfig | logger csv
+config    outputs/2026-07-04/15-29-49/config.yaml (full snapshot + git state)
+------------------------------------------------------------------------
+Epoch   0 | train_loss=2.3055 | val_loss=2.2940 | val_acc=0.0850
+Epoch   1 | train_loss=2.2907 | val_loss=2.2925 | val_acc=0.0800
+------------------------------------------------------------------------
+best      val_loss=2.2925 | val_acc=0.0800
+ckpts     outputs/2026-07-04/15-29-49/best.ckpt (+ last.ckpt)
+------------------------------------------------------------------------`},
+
+  c_cfg: {name:'src/wine_quality/configs.py', lang:'py', own:['yours','yours'], code:
+`class DataConfig(pydantic.BaseModel):
+    csv_path: str = "data/winequality-red.csv"
+    n_features: int = 11  # the 11 physicochemical measurements
+    n_classes: int = 6  # quality scores 3-8
+    batch_size: int = 64
+    num_workers: int = 4
+    val_split: float = 0.2
+
+
+class ModelConfig(pydantic.BaseModel):
+    hidden_dim: int = 128
+    lr: float = 3e-4
+    weight_decay: float = 1e-5
+    # Derived from DataConfig in TrainConfig.resolved() unless set explicitly.
+    n_features: int | None = None
+    n_classes: int | None = None
+
+
+class TrainConfig(pydantic.BaseModel):
+    ⋯
+    def resolved(self) -> "TrainConfig":
+        cfg = self.model_copy(deep=True)
+        if cfg.model.n_features is None:
+            cfg.model.n_features = cfg.data.n_features
+        if cfg.model.n_classes is None:
+            cfg.model.n_classes = cfg.data.n_classes
+        return cfg`},
+
+  d_dm: {name:'src/wine_quality/data/datamodule.py', lang:'py', own:['yours','yours'], code:
+`WINE_URL = (
+    "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"
+)
+
+
+class WineQualityDataset(Dataset):
+    """UCI red wine quality: 11 physicochemical features -> quality score 3-8."""
+
+    def __init__(self, csv_path: str) -> None:
+        path = Path(csv_path)
+        if not path.exists():  # download once, cache locally
+            path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(WINE_URL, path)
+        rows = np.loadtxt(path, delimiter=";", skiprows=1)
+        x = torch.tensor(rows[:, :-1], dtype=torch.float32)
+        self.data = (x - x.mean(0)) / x.std(0)  # standardize features
+        self.targets = torch.tensor(rows[:, -1], dtype=torch.long) - 3  # 3-8 -> 0-5
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.data[idx], self.targets[idx]
+
+
+def create_dataloaders(cfg: DataConfig, seed: int = 42) -> DataLoaders:
+    """Build train and val dataloaders from the data config — the data seam."""
+    dataset = WineQualityDataset(cfg.csv_path)
+    ⋯  # seeded split + DataLoaders (unchanged from the template)
+    return DataLoaders(train=train_loader, val=val_loader)`},
+
+  t_train: {name:'terminal', lang:'out', own:['out','real output'], code:
+`$ uv run python src/wine_quality/train.py trainer.max_epochs=30 run_dir=outputs/wine_first
+------------------------------------------------------------------------
+run dir   outputs/wine_first
+model     ExampleModel | 18,822 params | lr=0.0003
+trainer   max 30 epochs | 32-true | seed=42
+loss      SupervisedLossConfig | logger csv
+config    outputs/wine_first/config.yaml (full snapshot + git state)
+------------------------------------------------------------------------
+Epoch   0 | train_loss=1.7181 | val_loss=1.5782 | val_acc=0.5486
+Epoch   1 | train_loss=1.4662 | val_loss=1.3396 | val_acc=0.5643
+Epoch   2 | train_loss=1.2501 | val_loss=1.1751 | val_acc=0.5611
+    ⋮
+------------------------------------------------------------------------
+best      val_loss=0.9350 | val_acc=0.6489
+ckpts     outputs/wine_first/best.ckpt (+ last.ckpt)
+evaluate  uv run python src/wine_quality/eval.py ckpt_path=outputs/wine_first/best.ckpt
+------------------------------------------------------------------------`},
+
+  t_eval: {name:'terminal', lang:'out', own:['out','real output'], code:
+`$ uv run python src/wine_quality/eval.py ckpt_path=outputs/wine_first/best.ckpt
+eval: settings restored from outputs/wine_first/config.yaml
+Eval | loss=0.9350 | acc=0.6489`},
+
+  c_exp: {name:'src/wine_quality/experiments.py', lang:'py', own:['yours','yours'], code:
+`EXPERIMENTS: dict[str, TrainConfig] = {
+    # \`base\` is what runs when no experiment= is given.
+    "base": TrainConfig(),
+    ⋯
+    # The settings behind the walkthrough's headline number.
+    "wine": TrainConfig(
+        model=ModelConfig(lr=1e-3),
+        trainer=TrainerConfig(max_epochs=30, patience=10),
+    ),
+}`},
+
+  t_seeds: {name:'terminal', lang:'out', own:['out','real output'], code:
+`$ bash scripts/run_seeds.sh experiment=wine seeds="42,123,456,789,1337"
+Results in: outputs/multi_seed_20260704_153304
+
+$ uv run python scripts/aggregate_seeds.py outputs/multi_seed_20260704_153304 --metric val/acc
+Metric: val/acc
+Seeds:  [123, 1337, 42, 456, 789]
+Mean:   0.6213
+Std:    0.0379
+95% CI: [0.5918, 0.6545]`},
+
+  v_ci: {name:'val/acc across 5 seeds', lang:'viz', own:['out','real data'], html: buildCI()}
+};
+
+/* CI visualization — real numbers from the aggregate above */
+function buildCI(){
+  const seeds=[[42,0.6771],[123,0.6207],[456,0.5705],[789,0.6144],[1337,0.6238]];
+  const lo=0.5918, hi=0.6545, mean=0.6213, x0=0.55, x1=0.70, W=560, H=190, PL=30, PR=30;
+  const X=v=>PL+(v-x0)/(x1-x0)*(W-PL-PR);
+  let dots='';
+  seeds.forEach(([s,v],i)=>{
+    const cy=58;
+    dots+=`<circle cx="${X(v).toFixed(1)}" cy="${cy}" r="7" fill="#9d97ff" fill-opacity=".9"/>
+    <text x="${X(v).toFixed(1)}" y="${cy-16}" text-anchor="middle" font-size="10" fill="#9a9db8" font-family="JetBrains Mono,monospace">${s}</text>`;
+  });
+  let ticks='';
+  for(let t=0.56;t<=0.70;t+=0.02){
+    ticks+=`<line x1="${X(t)}" y1="120" x2="${X(t)}" y2="126" stroke="#3a3d63"/>
+    <text x="${X(t)}" y="142" text-anchor="middle" font-size="10" fill="#6a6d8a" font-family="JetBrains Mono,monospace">${t.toFixed(2)}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img"
+    aria-label="Dot plot of validation accuracy for 5 seeds with bootstrap confidence interval">
+    <rect x="${X(lo)}" y="30" width="${(X(hi)-X(lo)).toFixed(1)}" height="56" rx="6" fill="#6c63ff" fill-opacity=".16" stroke="#6c63ff" stroke-opacity=".5" stroke-dasharray="3 3"/>
+    <line x1="${X(mean)}" y1="22" x2="${X(mean)}" y2="94" stroke="#4ade80" stroke-width="2"/>
+    <text x="${X(mean)}" y="14" text-anchor="middle" font-size="11" fill="#4ade80" font-family="JetBrains Mono,monospace">mean 0.6213</text>
+    ${dots}
+    <line x1="${PL}" y1="120" x2="${W-PR}" y2="120" stroke="#3a3d63"/>
+    ${ticks}
+    <text x="${X(lo)}" y="108" text-anchor="middle" font-size="10" fill="#9d97ff" font-family="JetBrains Mono,monospace">0.5918</text>
+    <text x="${X(hi)}" y="108" text-anchor="middle" font-size="10" fill="#9d97ff" font-family="JetBrains Mono,monospace">0.6545</text>
+    <text x="${W-PR}" y="172" text-anchor="end" font-size="10" fill="#6a6d8a" font-family="Inter,sans-serif">band = bootstrap 95% CI of the mean · 10,000 resamples</text>
+  </svg>`;
+}
+
+/* ---------- tiny syntax highlighter (per line, docstring-aware) ---------- */
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const PY_KW = /\b(class|def|return|if|else|elif|for|in|not|None|True|False|import|from|self|is|and|or|with|as|int|str|float|bool|tuple|dict)\b/g;
+
+function hlPy(line, inDoc){
+  const trips = (line.match(/"""/g)||[]).length;
+  if (inDoc.v){ if (trips % 2 === 1) inDoc.v = false; return `<span class="tk-s">${esc(line)}</span>`; }
+  if (trips === 1 && line.trim().startsWith('"""')){ inDoc.v = true; return `<span class="tk-s">${esc(line)}</span>`; }
+  let out='', re=/("""[\s\S]*?"""|"(?:[^"\\]|\\.)*"|#.*$|\b\d[\d_.e-]*\b)/g, last=0, m;
+  const plain = seg => esc(seg).replace(PY_KW,'<span class="tk-k">$1</span>')
+    .replace(/\b([A-Za-z_]\w*)(?=\()/g,'<span class="tk-f">$1</span>');
+  while((m=re.exec(line))){
+    out += plain(line.slice(last,m.index));
+    const t=m[0];
+    out += t.startsWith('#') ? `<span class="tk-c">${esc(t)}</span>`
+        : /^\d/.test(t)      ? `<span class="tk-n">${esc(t)}</span>`
+        :                      `<span class="tk-s">${esc(t)}</span>`;
+    last = m.index + t.length;
+  }
+  return out + plain(line.slice(last));
+}
+
+function hlOut(line){
+  let e = esc(line);
+  if (line.startsWith('$')) return `<span class="tk-prompt">$</span><span class="tk-hi">${esc(line.slice(1))}</span>`;
+  if (/^-{10,}$/.test(line.trim())) return `<span class="tk-p">${e}</span>`;
+  e = e.replace(/^(run dir|model|trainer|loss|config|best|ckpts|evaluate|Epoch\s+\d+|Metric:|Seeds:|Mean:|Std:|95% CI:|eval:|Eval|Results in:|Try it:)/,'<span class="tk-head">$1</span>');
+  e = e.replace(/(\d+\.\d{4})/g,'<span class="tk-n">$1</span>');
+  return e;
+}
+
+function hlTree(line){
+  let cls='', txt=line;
+  if (line.startsWith('│Y')){ txt='│ '+line.slice(2); cls='y'; }
+  else if (line.startsWith('│T')){ txt='│ '+line.slice(2); cls='t'; }
+  let e=esc(txt);
+  e = e.replace(/(←.*)$/, cls==='y' ? '<span style="color:#4ade80">$1</span>'
+              : cls==='t' ? '<span style="color:#9d97ff">$1</span>' : '<span class="tk-c">$1</span>');
+  if (cls==='y') e = e.replace(/([\w./]+\.py|[\w./]+\/)/, '<span style="color:#4ade80;font-weight:600">$1</span>');
+  if (cls==='t') e = e.replace(/([\w./]+\.py)/, '<span style="color:#9d97ff;font-weight:600">$1</span>');
+  return e;
+}
+
+/* ---------- render files into panels ---------- */
+document.querySelectorAll('.beats').forEach(col=>{
+  const panel = document.getElementById(col.dataset.panel);
+  const body = panel.querySelector('.body');
+  const used = [...new Set([...col.querySelectorAll('.beat')].map(b=>b.dataset.file))];
+  used.forEach(id=>{
+    const f = FILES[id];
+    if (f.lang === 'viz'){
+      const div=document.createElement('div');
+      div.className='vizfile'; div.dataset.file=id; div.innerHTML=f.html;
+      body.appendChild(div); return;
+    }
+    const pre=document.createElement('pre');
+    pre.className='codefile'; pre.dataset.file=id;
+    const inDoc={v:false};
+    f.code.split('\n').forEach((line,i)=>{
+      const span=document.createElement('span');
+      span.className='ln'; span.dataset.l=i+1;
+      span.innerHTML = f.lang==='py' ? hlPy(line,inDoc)
+                     : f.lang==='tree' ? hlTree(line)
+                     : hlOut(line);
+      pre.appendChild(span);
+    });
+    body.appendChild(pre);
+  });
+});
+
+/* ---------- beat activation ---------- */
+function parseRanges(s){
+  if(!s) return [];
+  return s.split(',').map(r=>{const [a,b]=r.split('-').map(Number);return [a,b||a];});
+}
+
+function activate(beat){
+  const col = beat.closest('.beats');
+  col.querySelectorAll('.beat').forEach(b=>b.classList.toggle('on', b===beat));
+  const panel = document.getElementById(col.dataset.panel);
+  const id = beat.dataset.file, f = FILES[id];
+  panel.querySelectorAll('.codefile,.vizfile').forEach(el=>el.classList.toggle('show', el.dataset.file===id));
+  panel.querySelector('.fname').textContent = f.name;
+  const own = panel.querySelector('.own');
+  own.className = 'own ' + f.own[0]; own.textContent = f.own[1];
+  const ranges = parseRanges(beat.dataset.lines);
+  const file = panel.querySelector(`[data-file="${id}"]`);
+  if (file.classList.contains('codefile')){
+    file.classList.toggle('dimmed', ranges.length>0);
+    let first=null;
+    file.querySelectorAll('.ln').forEach(ln=>{
+      const n=+ln.dataset.l;
+      const hit=ranges.some(([a,b])=>n>=a&&n<=b);
+      ln.classList.toggle('hl',hit);
+      if(hit&&!first)first=ln;
+    });
+    if(first){
+      const body=panel.querySelector('.body');
+      const target=first.offsetTop - body.clientHeight*0.32;
+      body.scrollTo({top:Math.max(0,target)});
+    }
+  }
+}
+
+const beats=[...document.querySelectorAll('.beat')];
+beats.forEach(b=>b.addEventListener('click',()=>{activate(b);
+  b.scrollIntoView({block:'center'});}));
+
+const io=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting) activate(e.target); });
+},{rootMargin:'-42% 0px -42% 0px'});
+beats.forEach(b=>io.observe(b));
+activate(beats[0]);
+
+/* ---------- progress + step nav ---------- */
+const prog=document.getElementById('prog');
+const navLinks=[...document.querySelectorAll('#stepnav a')];
+const sections=[...document.querySelectorAll('section.step')];
+addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  prog.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';
+  let cur=-1;
+  sections.forEach((s,i)=>{ if(s.getBoundingClientRect().top < innerHeight*0.5) cur=i; });
+  navLinks.forEach((a,i)=>a.classList.toggle('on',i===cur));
+},{passive:true});
+</script>
+</body>
+</html>
