@@ -160,13 +160,13 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
   <div class="step-head">
     <div class="num">STEP 1 / 4</div>
     <h2>Generate the project</h2>
-    <p>One command scaffolds the lab. Nothing here is hand-written yet.</p>
+    <p>One command generates the project. Nothing here is hand-written yet.</p>
   </div>
   <div class="duo">
     <div class="beats" data-panel="p1">
       <div class="beat" data-file="t_gen" data-lines="1-2">
         <div class="tag">the command</div>
-        <h3>One command, one question set</h3>
+        <h3>One command</h3>
         <p>Copier asks ~8 prompts (name, Python, PyTorch or JAX, tracker…) and writes a working project. <code>--trust</code> lets it run <code>git init</code> + <code>uv sync</code> for you.</p>
       </div>
       <div class="beat" data-file="t_gen" data-lines="4-11">
@@ -182,12 +182,12 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
       <div class="beat" data-file="t_tree" data-lines="8-10">
         <div class="tag">the machinery</div>
         <h3>The rest is template-owned</h3>
-        <p>The training loop, eval, checkpointing, resume — <span style="color:var(--brand2)">purple</span> files update themselves when the template improves.</p>
+        <p>The training loop, eval, checkpointing, resume — <span style="color:var(--brand2)">purple</span> files are updated by <code>copier update</code>; you don't edit them.</p>
       </div>
       <div class="beat" data-file="t_smoke" data-lines="9-14">
-        <div class="tag">known-good baseline</div>
+        <div class="tag">smoke test</div>
         <h3>It trains before you touch anything</h3>
-        <p>Not to test the model — to test everything else: the install, the wheels for your hardware, config→CLI, the loop, checkpointing. Synthetic data adds zero unknowns. So when your data breaks something in step 2, the suspect list is exactly the files you edited.</p>
+        <p>Two epochs on synthetic data verifies the install, config parsing, training loop, and checkpointing before any of your code is involved.</p>
       </div>
     </div>
     <div class="panelwrap"><div class="panel" id="p1">
@@ -197,7 +197,7 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
   </div>
 </section>
 
-<div class="interlude"><p>Now the real work — and it's <span>two files</span>.</p></div>
+<div class="interlude"><p>Bringing your own data changes <span>two files</span>.</p></div>
 
 <!-- ============ STEP 2 ============ -->
 <section class="step" id="s2">
@@ -215,8 +215,8 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
       </div>
       <div class="beat" data-file="c_cfg" data-lines="2">
         <div class="tag">configs.py</div>
-        <h3>A field is a flag is a record</h3>
-        <p>Because <code>csv_path</code> is a config field, it's automatically a CLI flag (<code>data.csv_path=…</code>) <em>and</em> it lands in every run's provenance snapshot.</p>
+        <h3>Every field is a CLI flag</h3>
+        <p>Because <code>csv_path</code> is a config field, it can be set from the command line (<code>data.csv_path=…</code>) and is recorded in every run's config snapshot.</p>
       </div>
       <div class="beat" data-file="c_cfg" data-lines="3-4,14-16">
         <div class="tag">configs.py</div>
@@ -225,18 +225,18 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
       </div>
       <div class="beat" data-file="c_cfg" data-lines="21-27">
         <div class="tag">configs.py</div>
-        <h3>…by one visible function</h3>
-        <p><code>resolved()</code> is the entire "config interpolation system". No <code>${...}</code> syntax to learn — it's Python you can put a breakpoint in.</p>
+        <h3>…by one plain function</h3>
+        <p><code>resolved()</code> copies them over. This replaces YAML interpolation syntax — it's ordinary Python you can step through in a debugger.</p>
       </div>
       <div class="beat" data-file="d_dm" data-lines="9-13">
         <div class="tag">datamodule.py</div>
-        <h3>Download once, cache forever</h3>
-        <p>First run fetches 84 KB from UCI and saves it to <code>cfg.csv_path</code>. Every later run — and every test — hits the local file.</p>
+        <h3>Download once, then read locally</h3>
+        <p>The first run fetches 84 KB from UCI and saves it to <code>cfg.csv_path</code>. Later runs and tests read the local file.</p>
       </div>
       <div class="beat" data-file="d_dm" data-lines="14-17">
         <div class="tag">datamodule.py</div>
-        <h3>Four lines of real preprocessing</h3>
-        <p>Load, standardize each feature, shift labels 3–8 → 0–5. That's the whole ETL for this dataset — kept where you can see it.</p>
+        <h3>Four lines of preprocessing</h3>
+        <p>Load the CSV, standardize each feature, shift labels 3–8 to 0–5. That's all the preparation this dataset needs.</p>
       </div>
       <div class="beat" data-file="d_dm" data-lines="26-28">
         <div class="tag">datamodule.py</div>
@@ -251,14 +251,14 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
   </div>
 </section>
 
-<div class="interlude"><p>That was the diff. Everything after this is <span>just running things</span>.</p></div>
+<div class="interlude"><p>That was the only code change. The rest is <span>running commands</span>.</p></div>
 
 <!-- ============ STEP 3 ============ -->
 <section class="step" id="s3">
   <div class="step-head">
     <div class="num">STEP 3 / 4</div>
     <h2>Train &amp; evaluate</h2>
-    <p>Every line of console output is load-bearing. Read it once, trust it forever.</p>
+    <p>What the console output tells you, line by line.</p>
   </div>
   <div class="duo">
     <div class="beats" data-panel="p3">
@@ -269,13 +269,13 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
       </div>
       <div class="beat" data-file="t_train" data-lines="7">
         <div class="tag">provenance</div>
-        <h3>The line that saves future-you</h3>
-        <p><code>config.yaml</code> stores the resolved config, the git SHA, and the exact command. Re-running this result in six months is a copy-paste.</p>
+        <h3>The provenance snapshot</h3>
+        <p><code>config.yaml</code> stores the resolved config, the git SHA, and the exact command — everything needed to reproduce this run later.</p>
       </div>
       <div class="beat" data-file="t_train" data-lines="9-11">
         <div class="tag">training</div>
-        <h3>Real learning, real fast</h3>
-        <p>55% accuracy after one epoch on a laptop CPU. Early stopping (<code>patience</code>) decides when 30 epochs is too many.</p>
+        <h3>One line per epoch</h3>
+        <p>55% accuracy after the first epoch on a laptop CPU. Early stopping (<code>patience</code>) ends the run if validation loss stops improving.</p>
       </div>
       <div class="beat" data-file="t_train" data-lines="14-16">
         <div class="tag">the footer</div>
@@ -285,12 +285,12 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
       <div class="beat" data-file="t_eval" data-lines="2-3">
         <div class="tag">eval</div>
         <h3>Eval restores the run's settings</h3>
-        <p>It reads the snapshot next to the checkpoint — data path, model size, loss — so the numbers match training <em>exactly</em>: 0.9350 / 0.6489.</p>
+        <p>It reads the snapshot next to the checkpoint — data path, model size, loss — so the numbers match training exactly: 0.9350 / 0.6489.</p>
       </div>
       <div class="beat" data-file="c_exp" data-lines="5-9">
         <div class="tag">experiments.py</div>
         <h3>Name the winning settings</h3>
-        <p>The keeper settings become <code>experiment=wine</code> — a preset in version control. Results trace to a commit, not a shell history.</p>
+        <p>The settings worth keeping become <code>experiment=wine</code> — a preset in version control, so the result traces to a commit.</p>
       </div>
     </div>
     <div class="panelwrap"><div class="panel" id="p3">
@@ -307,7 +307,7 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
   <div class="step-head">
     <div class="num">STEP 4 / 4</div>
     <h2>Prove it</h2>
-    <p>The publication-grade number: a mean, an interval, and nothing hidden.</p>
+    <p>Turn one result into a number you can put in a paper.</p>
   </div>
   <div class="duo">
     <div class="beats" data-panel="p4">
@@ -323,13 +323,13 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
       </div>
       <div class="beat" data-file="v_ci" data-lines="">
         <div class="tag">what the CI shows</div>
-        <h3>Seeds scatter. The interval owns it.</h3>
-        <p>Seed 42 alone would have reported 0.677 — flattering and wrong. The band is the honest range for the mean.</p>
+        <h3>Why one seed isn't enough</h3>
+        <p>Seed 42 alone would have reported 0.677; seed 456, 0.571. The band is the range the five seeds actually support.</p>
       </div>
       <div class="beat" data-file="t_seeds" data-lines="7,9">
         <div class="tag">the paper line</div>
         <h3>0.621 ± 0.038 (5 seeds)</h3>
-        <p>That's what goes in the table. Beating a baseline? Run it with the <em>same seeds</em> and pass <code>--baseline</code> for a paired test + effect size.</p>
+        <p>That's what goes in the table. To compare against a baseline, run it with the same seeds and pass <code>--baseline</code> for a paired test and effect size.</p>
       </div>
     </div>
     <div class="panelwrap"><div class="panel" id="p4">
@@ -340,7 +340,7 @@ footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;f
 </section>
 
 <footer class="end">
-  <h2>That's the whole loop.</h2>
+  <h2>That's the full workflow</h2>
   <p>Data → train → eval → claim, with provenance at every step. The
   <a href="https://loevlie.github.io/ml-research-template/tour/">hands-on tour</a> continues from here:
   sweeps, Optuna, crash recovery, and a real paired significance test.</p>
