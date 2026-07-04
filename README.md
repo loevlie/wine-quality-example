@@ -6,6 +6,10 @@ generate a project, swap in a real dataset, train, evaluate, and finish with a
 publication-grade number. **One commit per step**, so the whole walkthrough is readable
 as diffs. Every output below is from an actual run of this code.
 
+**▶ [Take the interactive walkthrough](https://loevlie.github.io/wine-quality-example/)** —
+the same four steps as a scrollable code tour: each card lights up the exact
+lines doing the work.
+
 > **The result:** predicting red-wine quality from 11 physicochemical measurements
 > ([UCI wine quality](https://archive.ics.uci.edu/dataset/186/wine+quality), 1,599 rows),
 > the reference MLP reaches **0.621 ± 0.038** — mean validation accuracy over 5 seeds
