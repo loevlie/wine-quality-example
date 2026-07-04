@@ -20,4 +20,9 @@ EXPERIMENTS: dict[str, TrainConfig] = {
         model=ModelConfig(hidden_dim=256, lr=1e-3, weight_decay=1e-4),
         trainer=TrainerConfig(max_epochs=50),
     ),
+    # The settings behind the walkthrough's headline number.
+    "wine": TrainConfig(
+        model=ModelConfig(lr=1e-3),
+        trainer=TrainerConfig(max_epochs=30, patience=10),
+    ),
 }
