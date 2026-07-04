@@ -1,176 +1,124 @@
-# Wine Quality
+# Wine Quality — a complete `ml-research-template` walkthrough
 
-> Predict red-wine quality from physicochemical measurements — a complete walkthrough of ml-research-template.
+This repo is the [15-minute tutorial](https://loevlie.github.io/ml-research-template/tutorial/)
+of [ml-research-template](https://github.com/loevlie/ml-research-template), done for real:
+generate a project, swap in a real dataset, train, evaluate, and finish with a
+publication-grade number. **One commit per step**, so the whole walkthrough is readable
+as diffs. Every output below is from an actual run of this code.
 
-**Paper:** [Title](link) | **Demo:** [HF Spaces](link) | **Project Page:** [link](link)
+> **The result:** predicting red-wine quality from 11 physicochemical measurements
+> ([UCI wine quality](https://archive.ics.uci.edu/dataset/186/wine+quality), 1,599 rows),
+> the reference MLP reaches **0.621 ± 0.038 (5 seeds)** — mean validation accuracy with a
+> bootstrap 95% CI over 5 seeds. Trains in seconds on a laptop CPU.
 
-## Key Results
+## The steps, as commits
 
-| Method | Metric 1 | Metric 2 |
-|--------|----------|----------|
-| Baseline A | 85.2 +/- 0.3 | 72.1 +/- 0.5 |
-| Baseline B | 87.4 +/- 0.4 | 74.3 +/- 0.6 |
-| **Ours** | **91.0 +/- 0.2** | **79.8 +/- 0.3** |
+| Step | Commit | What changed |
+|---|---|---|
+| 1 · Generate the project | [`822088c`](../../commit/822088c) | `copier copy --trust gh:loevlie/ml-research-template wine-quality-example` — nothing hand-written yet |
+| 2 · Wire in the data | [`2c6e6bc`](../../commit/2c6e6bc) | `DataConfig` describes the dataset, `datamodule.py` loads it — the only two files you own for this |
+| 3 · Name the experiment | [`8a02be5`](../../commit/8a02be5) | The winning settings become `experiment=wine`, a preset in version control |
 
-*Mean +/- std over 5 seeds. Ours vs Baseline B: p<0.01 (Wilcoxon signed-rank).*
+Read the step-2 diff first — it's the whole "bring your own data" story:
+the entry points (`train.py`, `eval.py`) never change, because they only call
+`create_dataloaders(cfg, seed)` and `build_model(cfg)`.
 
-## Installation
+```mermaid
+flowchart LR
+    subgraph yours ["your files (never overwritten by copier update)"]
+        C["configs.py<br>DataConfig · ModelConfig"]
+        D["datamodule.py<br>create_dataloaders(cfg, seed)"]
+        M["models/module.py<br>build_model(cfg)"]
+    end
+    T["train.py / eval.py<br><i>template-owned, updated for you</i>"] --> D
+    T --> M
+    C --> D
+    C --> M
+```
+
+## Run it yourself
+
+[uv](https://docs.astral.sh/uv/) is the only prerequisite.
 
 ```bash
-# Install uv (if you don't have it)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install this project
+git clone https://github.com/loevlie/wine-quality-example
+cd wine-quality-example
 uv sync --extra dev
-uv run pre-commit install
-
-# Optional: extra tracking backends
-uv sync --extra tracking-wandb     # W&B (cloud)
-uv sync --extra tracking-trackio   # trackio (local-first, wandb-compatible)
-
-# Optional: publication-ready statistics
-uv sync --extra stats              # pingouin
-
-# Optional: SLURM submission (scripts/sweep.py, scripts/tune.py)
-uv sync --extra cluster            # submitit
+uv run pytest                 # 22 smoke tests, ~5 s
 ```
 
-## Quick Start
+The dataset (84 KB) downloads automatically on first use.
+
+### Train
 
 ```bash
-# Train with defaults
-uv run python src/wine_quality/train.py
-
-# Override anything — typed, typo-checked, free order
-uv run python src/wine_quality/train.py model.lr=1e-3 data.batch_size=128
-
-# Run a named experiment preset (src/wine_quality/experiments.py)
-uv run python src/wine_quality/train.py experiment=example
-
-# Multi-seed run (5 seeds)
-bash scripts/run_seeds.sh experiment=example seeds="42,123,456,789,1337"
-
-# Aggregate and get significance tests
-uv run python scripts/aggregate_seeds.py outputs/multi_seed_YYYYMMDD_HHMMSS
-
-# Evaluate a checkpoint
-uv run python src/wine_quality/eval.py ckpt_path=/path/to/best.ckpt
-
-# Cross-product sweep (local; add --cluster slurm for a SLURM array)
-uv run python scripts/sweep.py seed=42,123 model.lr=1e-4,1e-3
-
-# HP search with Optuna (edit the space in scripts/tune.py)
-uv run python scripts/tune.py --n-trials 20
-
-# Switch tracker (csv is the default)
-uv run python src/wine_quality/train.py logger.kind=wandb         # cloud — needs: uv sync --extra tracking-wandb
-uv run python src/wine_quality/train.py logger.kind=trackio       # local — needs: uv sync --extra tracking-trackio
-uv run python src/wine_quality/train.py logger.kind=tensorboard   # local
-uv run python src/wine_quality/train.py logger.kind=csv           # local, zero dependencies
+uv run python src/wine_quality/train.py trainer.max_epochs=30 run_dir=outputs/wine_first
 ```
 
-## Project Structure
-
-```
-.
-├── configs/local.yaml           # Machine-local overrides (gitignored)
-├── data/
-│   ├── raw/                     #   Immutable original data
-│   └── processed/               #   Transformed, model-ready data
-├── demo/app.py                  # Gradio demo for HF Spaces
-├── docs/                        # MkDocs documentation source
-├── project_page/index.html      # Academic project page
-├── notebooks/                   #   Exploration notebooks (not training)
-├── scripts/
-│   ├── run_seeds.sh             #   Multi-seed experiment launcher
-│   ├── aggregate_seeds.py       #   Aggregate results + significance tests
-│   ├── sweep.py                 #   Cross-product sweeps (local or SLURM array)
-│   └── tune.py                  #   Optuna HP search (local or SLURM workers)
-├── src/wine_quality/
-│   ├── configs.py               #   Typed config schema (pydantic) + GROUPS
-│   ├── experiments.py           #   Named experiment presets
-│   ├── data/datamodule.py       #   Dataset + DataLoader factory
-│   ├── models/module.py         #   nn.Module with jaxtyping shapes
-│   ├── objectives.py            #   Pluggable loss + forward (Objective protocol)
-│   ├── training_loop.py         #   Explicit loop primitives
-│   ├── utils/cli.py             #   Hydra-style CLI on tyro (key=value, groups, presets)
-│   ├── utils/run_dir.py         #   Timestamped run dirs + config snapshots
-│   ├── utils/{seed,stats}.py    #   Reproducibility + significance tests
-│   ├── train.py                 #   Training entry point
-│   └── eval.py                  #   Evaluation entry point
-├── tests/                       #   Smoke tests
-└── pyproject.toml               #   Dependencies, ruff, mypy, pytest config
+```text
+------------------------------------------------------------------------
+run dir   outputs/wine_first
+model     ExampleModel | 18,822 params | lr=0.0003
+trainer   max 30 epochs | 32-true | seed=42
+loss      SupervisedLossConfig | logger csv
+config    outputs/wine_first/config.yaml (full snapshot + git state)
+------------------------------------------------------------------------
+Epoch   0 | train_loss=1.7181 | val_loss=1.5782 | val_acc=0.5486
+Epoch   1 | train_loss=1.4662 | val_loss=1.3396 | val_acc=0.5643
+...
 ```
 
-## Configuration
+Every run lands in its run dir with `config.yaml` (resolved config + git SHA +
+the exact command — how you re-run this months later), `best.ckpt`, `last.ckpt`,
+and `metrics.json`.
 
-Configs are typed pydantic models in `src/wine_quality/configs.py`; presets live in `experiments.py`; machine-local overrides in `configs/local.yaml` (gitignored). The CLI keeps Hydra-style ergonomics on a typed core:
+### Evaluate
+
+The footer of every training run prints this command ready to paste:
 
 ```bash
-uv run python src/wine_quality/train.py experiment=example loss=contrastive loss.temperature=0.1 model.lr=1e-3
+uv run python src/wine_quality/eval.py ckpt_path=outputs/wine_first/best.ckpt
 ```
 
-- `experiment=<name>` selects a preset, `loss=<variant>` swaps a typed config block (see `GROUPS`), `a.b=v` overrides any field — free order, parse-time typo checking.
-- Derived values (e.g. `model.n_features` from `data.n_features`) resolve in `TrainConfig.resolved()`; `${a.b}` references work inside `configs/local.yaml`.
-- Every run writes its resolved config + git state + argv to `<run_dir>/config.yaml`.
+```text
+eval: settings restored from outputs/wine_first/config.yaml
+Eval | loss=0.9350 | acc=0.6489
+```
 
-## Swapping losses / Self-supervised
+The first line is the provenance snapshot doing its job — eval read the training
+run's config (data path, model size, loss) instead of making you re-specify it.
 
-Loss + forward pass are factored into a single `Objective` (see `src/wine_quality/objectives.py`). The training loop never references a specific loss — it calls `objective(model, batch)` and uses the returned `"loss"`. To add one:
+### The publication-grade number
 
-1. **Define the class** in `objectives.py` with `__call__(model, batch) -> dict`.
-2. **Add a config class** with a `build()` in `configs.py` and register it:
-
-    ```python
-    class MaskedLossConfig(pydantic.BaseModel):
-        mask_ratio: float = 0.15
-        def build(self):
-            return MaskedColumnObjective(mask_ratio=self.mask_ratio)
-
-    GROUPS["loss"]["masked"] = MaskedLossConfig   # + add to the LossConfig union
-    ```
-
-3. Run it: `uv run python src/wine_quality/train.py loss=masked loss.mask_ratio=0.3`
-
-The same pattern covers masked-column prediction (BERT-for-tables), next-state (world models), multi-task, and any SSL variant. Per-sample augmentations go in `src/wine_quality/data/augmentations.py`; batch-level augs (e.g., MixUp) belong in a custom `collate_fn` or inside the objective.
-
-## Running on SLURM
+One seed is an anecdote. Five seeds and a bootstrap CI is a claim:
 
 ```bash
-# Sweeps / HP search as SLURM jobs (needs: uv sync --extra cluster)
-uv run python scripts/sweep.py --cluster slurm --partition gpu seed=42,43,44 model.lr=1e-4,1e-3
-uv run python scripts/tune.py --cluster slurm --partition gpu --workers 8 --n-trials 64
-
-# Plain sbatch scripts (single job / seed array)
-sbatch scripts/sbatch_train.sh experiment=example
-sbatch scripts/sbatch_seeds.sh experiment=example
+bash scripts/run_seeds.sh experiment=wine seeds="42,123,456,789,1337"
+uv run python scripts/aggregate_seeds.py outputs/multi_seed_<stamp> --metric val/acc
 ```
 
-The sbatch scripts assume `.venv/` exists on a shared filesystem (`uv sync --extra dev --extra cluster` on the login node). All paths pin `run_dir` to the job ID and pass `trainer.resume=auto`, so preempted + requeued jobs continue from `last.ckpt` automatically.
-
-## Tools
-
-| Tool | Purpose |
-|------|---------|
-| [Lightning Fabric](https://lightning.ai/docs/fabric/) | Multi-GPU, mixed precision — no hidden training loop |
-| [pydantic](https://docs.pydantic.dev/) + [tyro](https://brentyi.github.io/tyro/) | Typed configs with Hydra-style CLI (utils/cli.py) |
-| [submitit](https://github.com/facebookincubator/submitit) + [Optuna](https://optuna.org/) | SLURM sweeps + HP search |
-| [W&B](https://wandb.ai/) / [trackio](https://github.com/gradio-app/trackio) / [TensorBoard](https://www.tensorflow.org/tensorboard) | Experiment tracking (switchable) |
-| [jaxtyping](https://github.com/patrick-kidger/jaxtyping) + [beartype](https://github.com/beartype/beartype) | Runtime shape checking |
-| [Ruff](https://github.com/astral-sh/ruff) | Linting + formatting |
-| [uv](https://docs.astral.sh/uv/) | Package management |
-
-## Citation
-
-```bibtex
-@inproceedings{author2026title,
-    title     = {Paper Title},
-    author    = {Dennis Loevlie},
-    booktitle = {Conference},
-    year      = {2026}
-}
+```text
+Metric: val/acc
+Seeds:  [123, 1337, 42, 456, 789]
+Mean:   0.6213
+Std:    0.0379
+95% CI: [0.5918, 0.6545]
 ```
 
-## License
+That's the line for the paper: **0.621 ± 0.038 (5 seeds)**. When you have a baseline to
+beat, run it with the *same seeds* and pass `--baseline` for the paired
+significance test and effect size.
 
-MIT
+## Where this goes next
+
+The [hands-on tour](https://loevlie.github.io/ml-research-template/tour/) continues
+from exactly this point: grid sweeps, Optuna search, crash recovery, tracker
+swapping, and a real paired significance test. Everything here also runs on SLURM
+unchanged — see the [docs](https://loevlie.github.io/ml-research-template/).
+
+To start your own project instead of cloning this one:
+
+```bash
+uv tool install copier
+copier copy --trust gh:loevlie/ml-research-template my-project
+```
