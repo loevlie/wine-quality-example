@@ -1,0 +1,61 @@
+"""Example model.
+
+This file is the model seam: `build_model(cfg)` is all train.py and eval.py
+know about. To use your own architecture, replace ExampleModel and the body
+of build_model (keep the signature) and add whatever fields you need to
+ModelConfig in configs.py — both files are yours and are never overwritten
+by `copier update`.
+
+Demonstrates shape-annotated signatures with jaxtyping + beartype.
+"""
+
+import torch.nn as nn
+from beartype import beartype
+from jaxtyping import Float, jaxtyped
+from torch import Tensor
+
+from wine_quality.configs import ModelConfig
+
+
+class ExampleModel(nn.Module):
+    """Simple MLP classifier -- replace with your architecture.
+
+    Args:
+        n_features: Input feature dimensionality.
+        hidden_dim: Hidden layer size.
+        n_classes: Number of output classes.
+    """
+
+    def __init__(
+        self,
+        n_features: int = 32,
+        hidden_dim: int = 128,
+        n_classes: int = 10,
+    ) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_features, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, n_classes),
+        )
+
+    @jaxtyped(typechecker=beartype)
+    def forward(self, x: Float[Tensor, "batch features"]) -> Float[Tensor, "batch classes"]:
+        return self.net(x)  # type: ignore[no-any-return]
+
+
+def build_model(cfg: ModelConfig) -> nn.Module:
+    """Build the model from the model config — the model seam.
+
+    Swap in your architecture here; keep this signature so train.py and
+    eval.py never need editing. New knobs (depth, dropout, backbone name)
+    belong on ModelConfig.
+    """
+    assert cfg.n_features is not None and cfg.n_classes is not None  # filled by resolved()
+    return ExampleModel(
+        n_features=cfg.n_features,
+        hidden_dim=cfg.hidden_dim,
+        n_classes=cfg.n_classes,
+    )

@@ -1,0 +1,206 @@
+"""Training entry point.
+
+Thin orchestrator: parse typed config → build data/model/objective/optim →
+call training loop primitives. The loop itself lives in `training_loop.py`,
+the loss + forward pass in `objectives.py`, and the config schema in
+`configs.py` — swap them without touching this file.
+
+Usage:
+    python src/wine_quality/train.py                                # base preset
+    python src/wine_quality/train.py experiment=example             # named preset
+    python src/wine_quality/train.py loss=contrastive               # swap objective
+    python src/wine_quality/train.py model.lr=1e-3 seed=123         # overrides
+    python src/wine_quality/train.py run_dir=outputs/x trainer.resume=auto
+"""
+
+import json
+import math
+import os
+from pathlib import Path
+
+import lightning as L
+import torch
+from torch.utils.data import DataLoader
+
+from wine_quality.configs import GROUPS, TrainConfig
+from wine_quality.data.datamodule import create_dataloaders
+from wine_quality.experiments import EXPERIMENTS
+from wine_quality.models.module import build_model
+from wine_quality.training_loop import train_epoch, validate
+from wine_quality.utils import cli
+from wine_quality.utils.run_dir import create_run_dir
+from wine_quality.utils.schedulers import build_scheduler
+from wine_quality.utils.seed import set_seed
+
+
+def run(cfg: TrainConfig) -> float:
+    """Train a model from a fully-built config (also the entry for tune.py).
+
+    Returns:
+        Best validation accuracy.
+    """
+    cfg = cfg.resolved()
+    set_seed(cfg.seed, deterministic=cfg.deterministic)
+    # Fabric's multi-device launcher re-runs this function in spawned ranks;
+    # the env var makes them reuse rank 0's directory instead of minting one.
+    run_dir_env = "WINE_QUALITY_RUN_DIR"
+    output_dir = create_run_dir(cfg, cfg.run_dir or os.environ.get(run_dir_env))
+    os.environ[run_dir_env] = str(output_dir)
+
+    # TF32 matmuls on Ampere+ GPUs — the standard free-speed setting for fp32.
+    if hasattr(torch.backends.cuda.matmul, "fp32_precision"):  # torch >= 2.9 API
+        torch.backends.cuda.matmul.fp32_precision = "tf32"
+    else:
+        torch.set_float32_matmul_precision("high")
+
+    # --- Fabric ---
+    fabric = L.Fabric(
+        accelerator=cfg.trainer.accelerator,
+        devices=cfg.trainer.devices,
+        precision=cfg.trainer.precision,
+        loggers=[cfg.logger.build(output_dir)],
+    )
+    fabric.launch()
+
+    # --- Data + Model (the two seams: datamodule.py and models/module.py) ---
+    loaders = create_dataloaders(cfg.data, seed=cfg.seed)
+    model = build_model(cfg.model)
+    model_name = type(model).__name__
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=cfg.model.lr, weight_decay=cfg.model.weight_decay
+    )
+
+    # Fabric wraps model, optimizer, dataloaders
+    model, optimizer = fabric.setup(model, optimizer)
+    train_loader: DataLoader = fabric.setup_dataloaders(loaders.train)  # type: ignore[assignment]
+    val_loader: DataLoader = fabric.setup_dataloaders(loaders.val)  # type: ignore[assignment]
+
+    # --- Objective (pluggable: supervised / contrastive / masked / next-state) ---
+    objective = cfg.loss.build()
+
+    # --- LR scheduler (per-step; scheduler.name=none keeps constant LR) ---
+    accumulate = cfg.trainer.accumulate_grad_batches
+    steps_per_epoch = math.ceil(len(train_loader) / accumulate)
+    scheduler = build_scheduler(
+        optimizer,
+        name=cfg.trainer.scheduler.name,
+        total_steps=cfg.trainer.max_epochs * steps_per_epoch,
+        warmup_steps=cfg.trainer.scheduler.warmup_steps,
+        min_lr_ratio=cfg.trainer.scheduler.min_lr_ratio,
+    )
+
+    # --- Resume ---
+    # Everything needed to continue a run lives in last.ckpt. `fabric.load`
+    # restores modules/optimizers in place and overwrites the scalar entries.
+    state: dict = {
+        "model": model,
+        "optimizer": optimizer,
+        "epoch": -1,
+        "best_val_loss": float("inf"),
+        "best_val_acc": 0.0,
+        "patience_counter": 0,
+    }
+    if scheduler is not None:
+        state["scheduler"] = scheduler
+
+    resume_path: Path | None = None
+    if cfg.trainer.resume == "auto":
+        candidate = output_dir / "last.ckpt"
+        resume_path = candidate if candidate.exists() else None
+    elif cfg.trainer.resume:
+        resume_path = Path(cfg.trainer.resume)
+    if resume_path is not None:
+        # weights_only pins torch.load's safe mode explicitly (default flipped in torch 2.6)
+        fabric.load(resume_path, state, weights_only=True)
+        fabric.print(f"Resumed from {resume_path} (epoch {state['epoch']})")
+
+    start_epoch = int(state["epoch"]) + 1
+    best_val_loss = float(state["best_val_loss"])
+    best_val_acc = float(state["best_val_acc"])
+    patience_counter = int(state["patience_counter"])
+
+    n_params = sum(p.numel() for p in model.parameters())
+    rule = "-" * 72
+    fabric.print(
+        f"{rule}\n"
+        f"run dir   {output_dir}\n"
+        f"model     {model_name} | {n_params:,} params | lr={cfg.model.lr:g}\n"
+        f"trainer   max {cfg.trainer.max_epochs} epochs | {cfg.trainer.precision} | seed={cfg.seed}\n"
+        f"loss      {type(cfg.loss).__name__} | logger {cfg.logger.kind}\n"
+        f"config    {output_dir}/config.yaml (full snapshot + git state)\n"
+        f"{rule}"
+    )
+
+    for epoch in range(start_epoch, cfg.trainer.max_epochs):
+        train_loss = train_epoch(
+            fabric,
+            model,
+            optimizer,
+            objective,
+            train_loader,
+            epoch,
+            scheduler=scheduler,
+            accumulate_grad_batches=accumulate,
+            gradient_clip_val=cfg.trainer.gradient_clip_val,
+        )
+        val_loss, val_acc = validate(fabric, model, objective, val_loader, epoch)
+
+        fabric.print(
+            f"Epoch {epoch:3d} | train_loss={train_loss:.4f} | "
+            f"val_loss={val_loss:.4f} | val_acc={val_acc:.4f}"
+        )
+
+        # Checkpointing
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_val_acc = val_acc
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        state.update(
+            epoch=epoch,
+            best_val_loss=best_val_loss,
+            best_val_acc=best_val_acc,
+            patience_counter=patience_counter,
+        )
+        if patience_counter == 0:
+            fabric.save(output_dir / "best.ckpt", state)
+        fabric.save(output_dir / "last.ckpt", state)
+
+        # Early stopping
+        if patience_counter >= cfg.trainer.patience:
+            fabric.print(f"Early stopping at epoch {epoch} (patience={cfg.trainer.patience})")
+            break
+
+    # Save final metrics for multi-seed aggregation
+    metrics = {"val/loss": best_val_loss, "val/acc": best_val_acc}
+    with open(output_dir / "metrics.json", "w") as f:
+        json.dump(metrics, f, indent=2)
+
+    # Flush loggers (CSVLogger buffers writes; trackers close their runs here).
+    for logger in fabric.loggers:
+        logger.finalize("success")
+
+    fabric.print(
+        f"{rule}\n"
+        f"best      val_loss={best_val_loss:.4f} | val_acc={best_val_acc:.4f}\n"
+        f"ckpts     {output_dir}/best.ckpt (+ last.ckpt)\n"
+        f"evaluate  uv run python src/wine_quality/eval.py ckpt_path={output_dir}/best.ckpt\n"
+        f"{rule}"
+    )
+    return best_val_acc
+
+
+def main() -> float:
+    cfg = cli.parse(
+        TrainConfig,
+        presets=EXPERIMENTS,
+        groups=GROUPS,
+        description="Train wine_quality.",
+    )
+    return run(cfg)
+
+
+if __name__ == "__main__":
+    main()

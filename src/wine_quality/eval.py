@@ -1,0 +1,82 @@
+"""Evaluation entry point.
+
+Usage:
+    python src/wine_quality/eval.py ckpt_path=/path/to/best.ckpt
+
+The training run's config.yaml (next to the checkpoint) is read automatically,
+so data/model settings match training without re-specifying them; CLI
+overrides still win.
+"""
+
+import sys
+from pathlib import Path
+
+import lightning as L
+import yaml
+from torch.utils.data import DataLoader
+
+from wine_quality.configs import DataConfig, EvalConfig, ModelConfig
+from wine_quality.data.datamodule import create_dataloaders
+from wine_quality.models.module import build_model
+from wine_quality.training_loop import validate
+from wine_quality.utils import cli
+from wine_quality.utils.seed import set_seed
+
+
+def _default_from_run(argv: list[str]) -> EvalConfig | None:
+    """Reconstruct an EvalConfig from the training run's config snapshot."""
+    for token in argv:
+        if token.startswith("ckpt_path="):
+            ckpt_path = token.split("=", 1)[1]
+            snapshot_path = Path(ckpt_path).parent / "config.yaml"
+            if not snapshot_path.exists():
+                return None
+            train_cfg = (yaml.safe_load(snapshot_path.read_text()) or {}).get("config", {})
+            if not train_cfg:
+                return None
+            return EvalConfig(
+                ckpt_path=ckpt_path,
+                seed=train_cfg.get("seed", 42),
+                data=DataConfig(**train_cfg.get("data", {})),
+                model=ModelConfig(**train_cfg.get("model", {})),
+                loss=train_cfg.get("loss", {}),
+                precision=train_cfg.get("trainer", {}).get("precision", "32-true"),
+            )
+    return None
+
+
+def main() -> None:
+    """Evaluate a trained model checkpoint."""
+    default = _default_from_run(sys.argv[1:])
+    if default is not None:
+        print(f"eval: settings restored from {Path(default.ckpt_path).parent / 'config.yaml'}")
+    cfg = cli.parse(
+        EvalConfig,
+        presets={"base": default} if default is not None else None,
+        description="Evaluate a checkpoint (training config auto-restored when found).",
+    ).resolved()
+    set_seed(cfg.seed, deterministic=True)
+
+    fabric = L.Fabric(
+        accelerator=cfg.accelerator,
+        devices=cfg.devices,
+        precision=cfg.precision,
+    )
+
+    # --- Data + Model (the same seams train.py uses) ---
+    loaders = create_dataloaders(cfg.data, seed=cfg.seed)
+    model = fabric.setup(build_model(cfg.model))
+    val_loader: DataLoader = fabric.setup_dataloaders(loaders.val)  # type: ignore[assignment]
+
+    # --- Load checkpoint ---
+    state = {"model": model}
+    fabric.load(cfg.ckpt_path, state, weights_only=True)
+
+    # --- Evaluate (same objective + validate() the training loop uses) ---
+    objective = cfg.loss.build()
+    avg_loss, accuracy = validate(fabric, model, objective, val_loader, epoch=0)
+    fabric.print(f"Eval | loss={avg_loss:.4f} | acc={accuracy:.4f}")
+
+
+if __name__ == "__main__":
+    main()

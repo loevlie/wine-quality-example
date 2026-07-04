@@ -1,0 +1,135 @@
+"""Explicit training loop primitives.
+
+train.py orchestrates setup and invokes these. Keep them free of config
+parsing — they accept plain args so they're testable in isolation.
+
+One objective, one loop — swap objectives (supervised / contrastive / masked /
+next-state) via the config without touching this file.
+"""
+
+import lightning as L
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+from wine_quality.objectives import Objective
+
+
+def train_epoch(
+    fabric: L.Fabric,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    objective: Objective,
+    train_loader: DataLoader,
+    epoch: int,
+    scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
+    accumulate_grad_batches: int = 1,
+    gradient_clip_val: float | None = 1.0,
+) -> float:
+    """Run one training epoch.
+
+    Args:
+        fabric: Lightning Fabric (for logging + backward).
+        model: The model to train.
+        optimizer: The optimizer.
+        objective: Any callable with signature (model, batch) -> dict containing "loss".
+        train_loader: Training dataloader (already wrapped by Fabric).
+        epoch: Current epoch number.
+        scheduler: Optional per-step LR scheduler (see utils/schedulers.py).
+        accumulate_grad_batches: Step the optimizer once every N batches,
+            scaling each loss by 1/N — emulates an N-times larger batch size.
+        gradient_clip_val: Max gradient norm before each optimizer step;
+            None or 0 disables clipping.
+
+    Returns:
+        Average training loss for the epoch.
+    """
+    model.train()
+    total_loss = 0.0
+    n_batches = 0
+    grad_norm: float | None = None
+
+    optimizer.zero_grad()
+    for batch_idx, batch in enumerate(train_loader):
+        # Step at the end of each accumulation window and on the final batch.
+        is_step_batch = (batch_idx + 1) % accumulate_grad_batches == 0 or (batch_idx + 1) == len(
+            train_loader
+        )
+
+        out = objective(model, batch)
+        loss = out["loss"]
+        # Skip DDP gradient sync on non-step batches — it would be wasted traffic.
+        with fabric.no_backward_sync(model, enabled=not is_step_batch):  # type: ignore[arg-type]
+            fabric.backward(loss / accumulate_grad_batches)
+
+        if is_step_batch:
+            if gradient_clip_val:
+                # clip_gradients returns the pre-clip total norm — log it below.
+                norm = fabric.clip_gradients(model, optimizer, max_norm=gradient_clip_val)
+                grad_norm = float(norm) if norm is not None else None
+            optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
+            optimizer.zero_grad()
+
+        total_loss += loss.item()
+        n_batches += 1
+
+        if batch_idx % 10 == 0:
+            global_step = epoch * len(train_loader) + batch_idx
+            fabric.log("train/loss_step", loss.item(), step=global_step)
+            fabric.log("train/lr", optimizer.param_groups[0]["lr"], step=global_step)
+            if grad_norm is not None:
+                fabric.log("train/grad_norm", grad_norm, step=global_step)
+
+    avg_loss = total_loss / n_batches
+    fabric.log("train/loss_epoch", avg_loss, step=epoch)
+    return avg_loss
+
+
+@torch.no_grad()
+def validate(
+    fabric: L.Fabric,
+    model: nn.Module,
+    objective: Objective,
+    val_loader: DataLoader,
+    epoch: int,
+) -> tuple[float, float]:
+    """Run validation.
+
+    Computes loss always. Computes argmax-based accuracy automatically iff the
+    objective emits both `logits` and `targets` in its output dict. For other
+    metrics (retrieval@k, regression MSE, per-dataset rank), extend this
+    function or compute them externally from the saved checkpoint.
+
+    Args:
+        fabric: Lightning Fabric (for logging).
+        model: The model to evaluate.
+        objective: Same callable shape as in train_epoch.
+        val_loader: Validation dataloader (already wrapped by Fabric).
+        epoch: Current epoch number.
+
+    Returns:
+        Tuple of (average val loss, accuracy). Accuracy is 0.0 when the
+        objective doesn't emit logits/targets.
+    """
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+
+    for batch in val_loader:
+        out = objective(model, batch)
+        total_loss += out["loss"].item()
+        if "logits" in out and "targets" in out:
+            logits, targets = out["logits"], out["targets"]
+            correct += (logits.argmax(dim=1) == targets).sum().item()
+            total += targets.size(0)
+
+    avg_loss = total_loss / len(val_loader)
+    accuracy = correct / total if total > 0 else 0.0
+
+    fabric.log("val/loss", avg_loss, step=epoch)
+    if total > 0:
+        fabric.log("val/acc", accuracy, step=epoch)
+    return avg_loss, accuracy

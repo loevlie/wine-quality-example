@@ -1,0 +1,46 @@
+#!/bin/bash
+# Single-node, multi-GPU training on SLURM.
+#
+# Usage:
+#   sbatch scripts/sbatch_train.sh                           # defaults
+#   sbatch scripts/sbatch_train.sh experiment=example        # forward to train.py
+#   sbatch scripts/sbatch_train.sh model.lr=1e-3 seed=123
+#
+# Preemption: --requeue + a stable run dir keyed to the job ID mean a requeued
+# job lands in the same outputs/ directory, and trainer.resume=auto picks up
+# last.ckpt (saved every epoch) — training continues from the last finished
+# epoch. --signal=B:USR1@90 additionally sends SIGUSR1 90s before walltime if
+# you want to wire Lightning's SLURMEnvironment(auto_requeue=True) for
+# mid-epoch checkpointing.
+#
+# Fill in for your cluster before first use (or pass via --partition/--account):
+# #SBATCH --partition=gpu
+# #SBATCH --account=YOURACCOUNT
+
+#SBATCH --job-name=wine_quality
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
+#SBATCH --requeue
+#SBATCH --signal=B:USR1@90
+#SBATCH --output=logs/slurm-%j.out
+#SBATCH --error=logs/slurm-%j.err
+
+set -euo pipefail
+mkdir -p logs
+
+# Activate the uv venv. Create it on the login node first:
+#   uv sync --extra dev --extra cluster
+source .venv/bin/activate
+# One srun + torchrun pair handles single-node multi-GPU DDP.
+# For multi-node DDP, see the note in README under "Running on SLURM".
+srun torchrun \
+    --standalone \
+    --nproc_per_node=${SLURM_GPUS_ON_NODE:-1} \
+    src/wine_quality/train.py \
+        run_dir="outputs/slurm_${SLURM_JOB_ID}" \
+        trainer.resume=auto \
+        "$@"

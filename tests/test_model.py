@@ -1,0 +1,75 @@
+"""Smoke tests for the model and data pipeline.
+
+Can the model overfit a single batch?
+These tests verify the basic pipeline works end-to-end.
+"""
+
+import torch
+
+from wine_quality.configs import DataConfig, ModelConfig
+from wine_quality.data.datamodule import create_dataloaders
+from wine_quality.models.module import ExampleModel, build_model
+from wine_quality.utils.seed import set_seed
+
+
+def test_forward_pass():
+    """Model produces correct output shape."""
+    set_seed(42)
+    model = ExampleModel(n_features=32, hidden_dim=64, n_classes=10)
+    x = torch.randn(8, 32)
+    out = model(x)
+    assert out.shape == (8, 10)
+
+
+def test_overfit_single_batch():
+    """Model can memorize a single batch."""
+    set_seed(42)
+    model = ExampleModel(n_features=32, hidden_dim=128, n_classes=10)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+    x = torch.randn(8, 32)
+    y = torch.randint(0, 10, (8,))
+
+    model.train()
+    for _ in range(200):
+        optimizer.zero_grad()
+        logits = model(x)
+        loss = torch.nn.functional.cross_entropy(logits, y)
+        loss.backward()
+        optimizer.step()
+
+    assert loss.item() < 0.01, f"Model failed to overfit single batch: loss={loss.item():.4f}"
+
+
+def test_dataloaders():
+    """Dataloaders create train and val splits."""
+    set_seed(42)
+    cfg = DataConfig(n_samples=100, batch_size=16, num_workers=0)
+    loaders = create_dataloaders(cfg, seed=42)
+    assert len(loaders.train) > 0
+    assert len(loaders.val) > 0
+
+
+def test_build_model_seam():
+    """build_model produces a model matching the (resolved) config."""
+    cfg = ModelConfig(hidden_dim=64, n_features=32, n_classes=10)
+    model = build_model(cfg)
+    out = model(torch.randn(8, 32))
+    assert out.shape == (8, 10)
+
+
+def test_loss_at_init():
+    """Loss at initialization matches -log(1/n_classes)."""
+    set_seed(42)
+    n_classes = 10
+    model = ExampleModel(n_features=32, hidden_dim=64, n_classes=n_classes)
+    model.eval()
+
+    x = torch.randn(64, 32)
+    y = torch.randint(0, n_classes, (64,))
+    logits = model(x)
+    loss = torch.nn.functional.cross_entropy(logits, y)
+
+    expected = -torch.log(torch.tensor(1.0 / n_classes))
+    assert abs(loss.item() - expected.item()) < 0.5, (
+        f"Init loss {loss.item():.3f} far from expected {expected.item():.3f}"
+    )

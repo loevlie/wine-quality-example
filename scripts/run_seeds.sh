@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Multi-seed experiment launcher.
+#
+# Usage:
+#   bash scripts/run_seeds.sh experiment=example seeds="42,123,456,789,1337"
+#   bash scripts/run_seeds.sh model.lr=1e-3 seeds="42,123,456"
+#
+# All arguments except seeds= are forwarded to the training script.
+
+set -euo pipefail
+
+# --- Parse seeds argument ---
+SEEDS="42,123,456,789,1337"  # default: 5 seeds
+FORWARD_ARGS=()
+
+for arg in "$@"; do
+    if [[ "$arg" == seeds=* ]]; then
+        SEEDS="${arg#seeds=}"
+    else
+        FORWARD_ARGS+=("$arg")
+    fi
+done
+
+IFS=',' read -ra SEED_ARRAY <<< "$SEEDS"
+N_SEEDS=${#SEED_ARRAY[@]}
+
+echo "=== Multi-Seed Launcher ==="
+echo "Seeds: ${SEEDS} (${N_SEEDS} runs)"
+echo "Args:  ${FORWARD_ARGS[*]:-<defaults>}"
+echo "==========================="
+
+# --- SLURM hint ---
+# If sbatch is available on this host and we're not inside a job already,
+# nudge the user toward the array-job launcher instead of a local loop.
+if command -v sbatch >/dev/null 2>&1 && [ -z "${SLURM_JOB_ID:-}" ]; then
+    echo ""
+    echo "Hint: sbatch is available. For parallel multi-seed on SLURM, use:"
+    echo "    sbatch scripts/sbatch_seeds.sh ${FORWARD_ARGS[*]:-}"
+    echo "Continuing with local sequential loop in 3 seconds..."
+    echo ""
+    sleep 3
+fi
+
+# --- Run each seed ---
+RESULTS_DIR="outputs/multi_seed_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$RESULTS_DIR"
+
+for seed in "${SEED_ARRAY[@]}"; do
+    echo ""
+    echo ">>> Running seed=${seed} ($(date))"
+    uv run python src/wine_quality/train.py \
+        seed="$seed" \
+        "${FORWARD_ARGS[@]}" \
+        run_dir="${RESULTS_DIR}/seed_${seed}" \
+        2>&1 | tee "${RESULTS_DIR}/seed_${seed}.log"
+    echo ">>> Finished seed=${seed}"
+done
+
+echo ""
+echo "=== All ${N_SEEDS} seeds complete ==="
+echo "Results in: ${RESULTS_DIR}"
+echo ""
+echo "Next: run 'uv run python scripts/aggregate_seeds.py ${RESULTS_DIR}' to compute statistics."

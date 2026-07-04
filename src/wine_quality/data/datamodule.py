@@ -1,0 +1,90 @@
+"""Example dataset and dataloader factory.
+
+This file is the data seam: `create_dataloaders(cfg, seed)` is all train.py
+and eval.py know about. To use your own data, replace the body (keep the
+signature) and add whatever fields you need to DataConfig in configs.py —
+both files are yours and are never overwritten by `copier update`.
+
+Demonstrates reproducible loading: seeded splits and worker init.
+"""
+
+from dataclasses import dataclass
+
+import torch
+from torch.utils.data import DataLoader, Dataset, random_split
+
+from wine_quality.configs import DataConfig
+from wine_quality.utils.seed import seed_worker
+
+
+class ExampleDataset(Dataset):
+    """Placeholder dataset -- replace with your own.
+
+    Args:
+        n_samples: Number of synthetic samples.
+        n_features: Feature dimensionality.
+        n_classes: Number of target classes.
+    """
+
+    def __init__(self, n_samples: int = 1000, n_features: int = 32, n_classes: int = 10) -> None:
+        self.data = torch.randn(n_samples, n_features)
+        self.targets = torch.randint(0, n_classes, (n_samples,))
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.data[idx], self.targets[idx]
+
+
+@dataclass
+class DataLoaders:
+    """Train and val dataloaders."""
+
+    train: DataLoader
+    val: DataLoader
+
+
+def create_dataloaders(cfg: DataConfig, seed: int = 42) -> DataLoaders:
+    """Build train and val dataloaders from the data config — the data seam.
+
+    Replace the dataset below with your own; keep this signature so train.py
+    and eval.py never need editing. New knobs (paths, transforms, splits)
+    belong on DataConfig.
+
+    Args:
+        cfg: The data config block.
+        seed: Seed for the train/val split and worker init.
+
+    Returns:
+        DataLoaders with train and val loaders.
+    """
+    dataset = ExampleDataset(
+        n_samples=cfg.n_samples, n_features=cfg.n_features, n_classes=cfg.n_classes
+    )
+
+    n_val = int(len(dataset) * cfg.val_split)
+    n_train = len(dataset) - n_val
+    generator = torch.Generator().manual_seed(seed)
+    train_set, val_set = random_split(dataset, [n_train, n_val], generator=generator)
+
+    g = torch.Generator().manual_seed(seed)
+    train_loader = DataLoader(
+        train_set,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+        worker_init_fn=seed_worker,
+        generator=g,
+        pin_memory=torch.cuda.is_available(),  # pinning is CUDA-only; avoids the MPS warning
+        persistent_workers=cfg.num_workers > 0,
+    )
+    val_loader = DataLoader(
+        val_set,
+        batch_size=cfg.batch_size,
+        shuffle=False,
+        num_workers=cfg.num_workers,
+        pin_memory=torch.cuda.is_available(),  # pinning is CUDA-only; avoids the MPS warning
+        persistent_workers=cfg.num_workers > 0,
+    )
+    return DataLoaders(train=train_loader, val=val_loader)

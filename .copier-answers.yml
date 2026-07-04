@@ -1,0 +1,17 @@
+# Changes here will be overwritten by Copier; do not edit by hand.
+# To update answers, run `copier update --data key=value`.
+_commit: 6b82c24
+_src_path: gh:loevlie/ml-research-template
+author_email: loevliedenny@gmail.com
+author_name: Dennis Loevlie
+cuda_version: cpu
+flavor: generic
+framework: pytorch
+include_dennys_rules: false
+include_example: true
+logger: csv
+package_name: wine_quality
+project_description: Predict red-wine quality from physicochemical measurements —
+    a complete walkthrough of ml-research-template.
+project_name: Wine Quality
+python_version: '3.12'
