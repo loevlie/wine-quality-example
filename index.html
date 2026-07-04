@@ -65,6 +65,8 @@ section.step{max-width:1180px;margin:0 auto;padding:40px 22px 8vh}
 .step-head p{color:var(--mut);margin-top:10px}
 
 .duo{display:grid;grid-template-columns:minmax(280px,5fr) minmax(360px,7fr);gap:36px;align-items:start}
+.duo>*{min-width:0}
+.beat p,.beat h3{overflow-wrap:anywhere}
 
 /* beats column */
 .beats{display:flex;flex-direction:column;gap:38vh;padding:14vh 0 20vh}
@@ -110,7 +112,7 @@ footer.end{border-top:1px solid var(--line);margin-top:8vh;padding:9vh 24px 12vh
   background:radial-gradient(900px 400px at 50% 120%,rgba(108,99,255,.16),transparent 65%)}
 footer.end h2{font-size:clamp(1.4rem,3vw,2rem);font-weight:800}
 footer.end p{color:var(--mut);max-width:560px;margin:14px auto 0}
-.cmd{display:inline-block;margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+.cmd{display:inline-block;max-width:100%;overflow-x:auto;margin-top:26px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
   padding:14px 22px;font-family:var(--mono);font-size:.85rem;color:var(--ink);text-align:left}
 .cmd .tk-prompt{user-select:none}
 footer.end .links{margin-top:30px;display:flex;gap:22px;justify-content:center;flex-wrap:wrap;font-size:.9rem}
